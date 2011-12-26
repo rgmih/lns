@@ -9,6 +9,8 @@ import json
 import os
 import copy
 import urllib2
+import sqlite3
+from datetime import datetime, timedelta
 
 options = {
     "SELF_ADDRESS" : "192.168.1.2",
@@ -54,6 +56,19 @@ class Share:
         self.__points = {}
         self.__lock = threading.Lock()
         self.__local_entries = {} # dictionary of files shared locally
+        
+        # initialize database
+        db = sqlite3.connect('lns.db')
+        cursor = db.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS entry(name text,path text,until timestamp)")
+        
+        # now read entries
+        cursor.execute("SELECT * FROM entry")
+        for row in cursor:
+            self.__local_entries[row[0]] = Share.Entry(row[1])
+            logging.info("init: \"{0}\" at \"{1}\" until {2}".format(row[0],row[1],row[2]))
+        db.commit()
+        db.close()
     
     def attach(self, addr):
         with self.__lock:
@@ -96,6 +111,11 @@ class Share:
                     return ShareResult.DUPLICATE
                 
                 # TODO write to database
+                db = sqlite3.connect('lns.db')
+                db.execute("INSERT INTO entry VALUES (?,?,?)", (name,path,datetime.now()+timedelta(days=1)))
+                db.commit()
+                db.close()
+                
                 self.__local_entries[name] = Share.Entry(path)
                 logging.info("{0} shared; OK".format(path))
                 
