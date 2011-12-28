@@ -13,7 +13,7 @@ import sqlite3
 from datetime import datetime, timedelta
 
 options = {
-    "SELF_ADDRESS" : "192.168.1.2",
+    "SELF_ADDRESS" : "10.1.30.32",
     "UDP_PORT" : 6500,
     "HTTP_PORT" : 8080
 }

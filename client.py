@@ -5,6 +5,8 @@ import urllib2
 import logging.config
 
 if __name__ == '__main__':
+    host = 'localhost'
+    port = 8080
     logging.config.fileConfig("logging.cfg")
     if len(sys.argv) is 1:
         # go to console mode
@@ -20,7 +22,7 @@ if __name__ == '__main__':
             path_list.append(fullpath)
         print 
         opener = urllib2.build_opener(urllib2.HTTPHandler)
-        http_request = urllib2.Request("http://localhost:8080/share", json.dumps(path_list))
+        http_request = urllib2.Request("http://{0}:{1}/share".format(host, port), json.dumps(path_list))
         url = opener.open(http_request)
         result = int(url.read())
         url.close()
@@ -33,8 +35,16 @@ if __name__ == '__main__':
             logging.error("unable to share; file does not exists")
     elif sys.argv[1] == "ls":
         opener = urllib2.build_opener(urllib2.HTTPHandler)
-        http_request = urllib2.Request("http://localhost:8080/ls")
+        http_request = urllib2.Request("http://{0}:{1}/ls".format(host, port))
         url = opener.open(http_request)
         print url.read()
         url.close()
+    elif sys.argv[1] == "get":
+        opener = urllib2.build_opener(urllib2.HTTPHandler)
+        for name in sys.argv[2:]:
+            http_request = urllib2.Request("http://{0}:{1}/entry/{2}".format(host, port, name))
+            url = opener.open(http_request)
+            local_file = open(name, 'w')
+            local_file.write(url.read())
+            local_file.close() 
     pass
