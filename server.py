@@ -140,21 +140,19 @@ class Share:
                 
         return ShareResult.OK
     
-    def remove(self, path_list):
+    def remove(self, name):
         with self.__lock:
-            for path in path_list:
-                if path in self.__local_entries:
-                    db = sqlite3.connect('lns.db')
-                    print len(path)
-                    db.execute("DELETE FROM entry WHERE name = ?", (path,))
-                    db.commit()
-                    db.close()
-                    
-                    self.__local_entries.pop(path)
-                else:
-                    logging.warn("unable to remove {0}; file doesn't exist".format(path))
-                    return RemoveResult.NOT_EXISTS
-                logging.info("{0} deleted; OK".format(path))
+            if name in self.__local_entries:
+                db = sqlite3.connect('lns.db')
+                db.execute("DELETE FROM entry WHERE name = ?", (name,))
+                db.commit()
+                db.close()
+                
+                self.__local_entries.pop(name)
+            else:
+                logging.warn("unable to remove {0}; file doesn't exist".format(name))
+                return RemoveResult.NOT_EXISTS
+            logging.info("{0} deleted; OK".format(name))
             return RemoveResult.OK
     def connect(self):
         
@@ -291,9 +289,8 @@ class Share:
                     self.wfile.write(result)
                 elif self.path == "/rm":
                     length = int(self.headers['Content-Length'])
-                    content = self.rfile.read(length)
-                    path_list = json.loads(content)
-                    result = share.remove(path_list)
+                    content = u'' + self.rfile.read(length)
+                    result = share.remove(content)
                     
                     self.send_response(200)
                     self.send_header("Content-type", "text/plain")
