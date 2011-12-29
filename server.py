@@ -5,6 +5,7 @@ import copy
 import json
 import logging.config
 import os
+import re
 import socket
 import sqlite3
 import tarfile
@@ -40,6 +41,10 @@ class ShareResult:
     DUPLICATE = 1
     NOT_EXIST = 2
     INTERNAL  = 3
+    
+class RemoveResult:
+    OK        = 0
+    NOT_EXISTS = 1
 
 class Share:
     
@@ -134,7 +139,23 @@ class Share:
                 logging.info("{0} shared; OK".format(path))
                 
         return ShareResult.OK
-        
+    
+    def remove(self, path_list):
+        with self.__lock:
+            for path in path_list:
+                if path in self.__local_entries:
+                    db = sqlite3.connect('lns.db')
+                    print len(path)
+                    db.execute("DELETE FROM entry WHERE name = ?", (path,))
+                    db.commit()
+                    db.close()
+                    
+                    self.__local_entries.pop(path)
+                else:
+                    logging.warn("unable to remove {0}; file doesn't exist".format(path))
+                    return RemoveResult.NOT_EXISTS
+                logging.info("{0} deleted; OK".format(path))
+            return RemoveResult.OK
     def connect(self):
         
         share = self
@@ -263,6 +284,16 @@ class Share:
                     content = self.rfile.read(length)
                     path_list = json.loads(content)
                     result = share.share(path_list)
+                    
+                    self.send_response(200)
+                    self.send_header("Content-type", "text/plain")
+                    self.end_headers()
+                    self.wfile.write(result)
+                elif self.path == "/rm":
+                    length = int(self.headers['Content-Length'])
+                    content = self.rfile.read(length)
+                    path_list = json.loads(content)
+                    result = share.remove(path_list)
                     
                     self.send_response(200)
                     self.send_header("Content-type", "text/plain")

@@ -21,6 +21,17 @@ def get_file(host, port, name, file_info):
         os.remove(name)
     print "GET 200: from '{0}'".format(file_path)
 
+def send_post(action, data_list):
+    localhost = options['SELF_ADDRESS']
+    port = options['HTTP_PORT']
+    opener = urllib2.build_opener(urllib2.HTTPHandler)
+    http_request = urllib2.Request("http://{0}:{1}/{2}".format(localhost, port, action), json.dumps(data_list))
+    url = opener.open(http_request)
+    result = int(url.read())
+    url.close()
+    return result
+
+
 if __name__ == '__main__':
     localhost = options['SELF_ADDRESS']
     port = options['HTTP_PORT']
@@ -38,26 +49,18 @@ if __name__ == '__main__':
             print "sharing {0}".format(fullpath)
             path_list.append(fullpath)
         print 
-        opener = urllib2.build_opener(urllib2.HTTPHandler)
-        http_request = urllib2.Request("http://{0}:{1}/share".format(localhost, port), json.dumps(path_list))
-        url = opener.open(http_request)
-        result = int(url.read())
-        url.close()
-        
+        result = send_post("share", path_list)
         if result == 0:
             logging.info("shared; OK")
         elif result == 1:
             logging.error("unable to share; file name already registered at local share-point")
         elif result == 2:
-            logging.error("unable to share; file does not exists")
+            logging.error("unable to share; file does not exist")
+            
     elif sys.argv[1] == "ls":
-        opener = urllib2.build_opener(urllib2.HTTPHandler)
-        http_request = urllib2.Request("http://{0}:{1}/ls".format(localhost, port))
-        url = opener.open(http_request)
-        print url.read()
-        url.close()
+        result = http_get("http://{0}:{1}/ls".format(localhost, port))
+        print result
     elif sys.argv[1] == "get":
-        opener = urllib2.build_opener(urllib2.HTTPHandler)
         result = http_get("http://{0}:{1}/ls".format(localhost, port))
         share = json.loads(result)
         files = {}
@@ -85,4 +88,14 @@ if __name__ == '__main__':
                     get_file(file_host, port, file_name, file_info)
                 else:
                     print "File '{0}': not found".format(name)
+    elif sys.argv[1] == 'rm':
+        path_list = []
+        for path in sys.argv[2:]:
+            print "deleting {0}".format(path)
+            path_list.append(path)
+        result = send_post("rm", path_list)
+        if result == 0:
+            logging.info("removed; OK")
+        elif result == 1:
+            logging.error("unable to remove; file or directory does not exist")
     pass
