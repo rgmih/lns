@@ -14,7 +14,7 @@ import time
 import urllib2
 
 options = {
-    "SELF_ADDRESS" : "10.1.30.32",
+    "SELF_ADDRESS" : "10.1.30.41",
     "UDP_PORT" : 6500,
     "HTTP_PORT" : 6969,
     "TEMP" : ".lns"
@@ -185,6 +185,12 @@ class Share:
         
         # run HTTP server
         class HTTPHandler(BaseHTTPRequestHandler):
+            def read_in_chunks(self, file_object, chunk_size=16384):
+                while True:
+                    data = file_object.read(chunk_size)
+                    if not data:
+                        break
+                    yield data
             
             def do_GET_entry(self,name):
                 entry = share.get_local_entry(name)
@@ -208,12 +214,6 @@ class Share:
                 size = os.path.getsize(path)
                 logging.debug("serving \"{0}\" ({2} bytes) from \"{1}\"".format(name,path,size))
                 
-                def read_in_chunks(file_object, chunk_size=16384):
-                    while True:
-                        data = file_object.read(chunk_size)
-                        if not data:
-                            break
-                        yield data
                 
                 f = open(path,"rb")
                 
@@ -222,7 +222,7 @@ class Share:
                 self.send_header("Content-Length", size)
                 self.end_headers()
                 
-                for piece in read_in_chunks(f):
+                for piece in self.read_in_chunks(f):
                     self.wfile.write(piece)
                 return
             
@@ -251,6 +251,24 @@ class Share:
                 elif self.path.startswith("/entry/"):
                     self.do_GET_entry(self.path[7:])
                     return
+                elif (self.path == "/index.html" or self.path == "/"):
+                    path = "index.html"
+                    if os.path.exists(path):
+                        size = os.path.getsize(path)
+                        f = open(path,"rb")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/html")
+                        self.send_header("Content-Length", size)
+                        self.end_headers()
+                
+                        for piece in self.read_in_chunks(f):
+                            self.wfile.write(piece)
+                        return
+                    else:
+                        print 'Can not locate file \"index.html in home directory\" '
+                else:
+                    self.send_error(404)
+
                 
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
