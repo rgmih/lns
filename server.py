@@ -286,7 +286,8 @@ class Share:
                             self.wfile.write(piece)
                         return
                     else:
-                        print 'Can not locate file \"index.html in home directory\" '
+                        logging.warn("Can not locate requested file: {0}".format(path))
+                        self.send_error(404)
                 else:
                     self.send_error(404)
 
