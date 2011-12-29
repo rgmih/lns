@@ -1,21 +1,23 @@
-import SocketServer
-import logging.config
-import socket
-import thread
-import time
-import threading
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
-import json
-import os
-import copy
-import urllib2
-import sqlite3
 from datetime import datetime, timedelta
+import SocketServer
+import copy
+import json
+import logging.config
+import os
+import socket
+import sqlite3
+import thread
+import threading
+import time
+import urllib2
+from tarfile import TarFile
 
 options = {
     "SELF_ADDRESS" : "10.1.30.32",
     "UDP_PORT" : 6500,
-    "HTTP_PORT" : 8080
+    "HTTP_PORT" : 6969,
+    "TEMP" : ".lns"
 }
 
 def send_broadcast(port, msg):
@@ -110,6 +112,14 @@ class Share:
                     logging.warn("unable to share {0}; file doesn't exist".format(path))
                     return ShareResult.NOT_EXIST
                 name = os.path.basename(path)
+                if os.path.isdir(path):
+                    if not os.path.isdir(options["TEMP"]):
+                        os.mkdir(options["TEMP"])
+                    os.path.basename
+                    with TarFile.open(options["TEMP"] + os.sep + name + '.tar', 'w') as tar:
+                        tar.add(path)
+                        tar.close()
+                    
                 if name in self.__local_entries.iterkeys():
                     logging.warn("unable to share {0}; file name already registered at local share-point".format(name))
                     return ShareResult.DUPLICATE
