@@ -5,6 +5,7 @@ import copy
 import json
 import logging.config
 import os
+import re
 import socket
 import sqlite3
 import tarfile
@@ -40,6 +41,10 @@ class ShareResult:
     DUPLICATE = 1
     NOT_EXIST = 2
     INTERNAL  = 3
+    
+class RemoveResult:
+    OK        = 0
+    NOT_EXISTS = 1
 
 class Share:
     
@@ -134,7 +139,21 @@ class Share:
                 logging.info("{0} shared; OK".format(path))
                 
         return ShareResult.OK
-        
+    
+    def remove(self, name):
+        with self.__lock:
+            if name in self.__local_entries:
+                db = sqlite3.connect('lns.db')
+                db.execute("DELETE FROM entry WHERE name = ?", (name,))
+                db.commit()
+                db.close()
+                
+                self.__local_entries.pop(name)
+            else:
+                logging.warn("unable to remove {0}; file doesn't exist".format(name))
+                return RemoveResult.NOT_EXISTS
+            logging.info("{0} deleted; OK".format(name))
+            return RemoveResult.OK
     def connect(self):
         
         share = self
@@ -281,6 +300,15 @@ class Share:
                     content = self.rfile.read(length)
                     path_list = json.loads(content)
                     result = share.share(path_list)
+                    
+                    self.send_response(200)
+                    self.send_header("Content-type", "text/plain")
+                    self.end_headers()
+                    self.wfile.write(result)
+                elif self.path == "/rm":
+                    length = int(self.headers['Content-Length'])
+                    content = u'' + self.rfile.read(length)
+                    result = share.remove(content)
                     
                     self.send_response(200)
                     self.send_header("Content-type", "text/plain")
