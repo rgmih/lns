@@ -268,10 +268,12 @@ class Share:
                                 return json.JSONEncoder.default(self, obj)
                     response = json.dumps(entries, cls=EntryJSONEncoder)
                 elif self.path.startswith("/entry/"):
-                    self.do_GET_entry(self.path[7:])
+                    self.do_GET_entry(self.path[:])
                     return
-                elif (self.path == "/index.html" or self.path == "/"):
-                    path = "index.html"
+                elif (self.path == "/index.html" or self.path == "/" or self.path.startswith("/static/")):
+                    path = self.path[1:]
+                    if not path:
+                        path = "index.html"
                     if os.path.exists(path):
                         size = os.path.getsize(path)
                         f = open(path,"rb")
