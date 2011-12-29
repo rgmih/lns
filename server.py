@@ -272,13 +272,20 @@ class Share:
                     return
                 elif (self.path == "/index.html" or self.path == "/" or self.path.startswith("/static/")):
                     path = self.path[1:]
+                    content_type = ""
+                    print path[-2:]
+                    if (path[-2:] == "js"):
+                        content_type = "text/javascript"
+                    else:
+                        content_type = "text/html"
+                        
                     if not path:
                         path = "index.html"
                     if os.path.exists(path):
                         size = os.path.getsize(path)
                         f = open(path,"rb")
                         self.send_response(200)
-                        self.send_header("Content-Type", "text/html")
+                        self.send_header("Content-Type", content_type)
                         self.send_header("Content-Length", size)
                         self.end_headers()
                 

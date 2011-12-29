@@ -3,12 +3,19 @@
 
 <html lang="en-US">
 	<head>
-		<div class="header">Header</div>
+		<h1 class="h1">Shared files:</h1>
 		<script type="text/javascript" src="/static/jquery.js"></script>
+		<script type="text/javascript" src="/static/index.js"></script>
 		<script type="text/javascript">
-	$(document).ready(function() {
-		alert('trolololo');
-	});
+			$(document).ready(function() {
+				alert('trolololo');
+			});
 		</script>
 	</head>
+	
+	<body>
+		<div>
+			<a href="#" onclick="update_entries(); return false;">Refresh</a>
+		</div>
+	</body>
 </html>
