@@ -1,18 +1,24 @@
-import sys
-import os
-import json
-import urllib2
-import logging.config
 from server import http_get, options
+import json
+import logging.config
+import os
+import sys
+import tarfile
+import urllib2
 
-def get_file(host, port, name):
+def get_file(host, port, name, file_info):
     file_path = "http://{0}:{1}/entry/{2}".format(host, port, name)
     data = http_get(file_path)
-    if (host != options['SELF_ADDRESS']):
-        name += '@' + host
+    if file_info["isdir"]:
+        name += '.tar'
     local_file = open(name, 'w')
     local_file.write(data)
-    local_file.close() 
+    local_file.close()
+    if file_info["isdir"]:
+        tar = tarfile.open(name)
+        tar.extractall()
+        tar.close()
+        os.remove(name)
     print "GET 200: from '{0}'".format(file_path)
 
 if __name__ == '__main__':
@@ -58,9 +64,9 @@ if __name__ == '__main__':
         for host in share.iterkeys():
             for file_name in share[host].iterkeys():
                 if not file_name in files:
-                    files[file_name] = []
+                    files[file_name] = {}
                 hosts = files[file_name]
-                hosts.append(host)
+                hosts[host] = share[host][file_name]
         
         for name in sys.argv[2:]:
             name_with_host = name.partition('@')
@@ -70,11 +76,13 @@ if __name__ == '__main__':
                 hosts = files[file_name]
                 if not file_host:
                     if len(hosts) == 1:
-                        get_file(localhost, port, file_name)
+                        host = hosts.iterkeys().next()
+                        get_file(host, port, file_name, hosts[host])
                     else:
                         print "Error: ambiguous file name '{0}'. You must specify a host: {1}".format(name, hosts)
                 elif file_host in hosts:
-                    get_file(file_host, port, file_name)
+                    file_info = hosts[file_host]
+                    get_file(file_host, port, file_name, file_info)
                 else:
                     print "File '{0}': not found".format(name)
     pass

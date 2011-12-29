@@ -7,11 +7,11 @@ import logging.config
 import os
 import socket
 import sqlite3
+import tarfile
 import thread
 import threading
 import time
 import urllib2
-from tarfile import TarFile
 
 options = {
     "SELF_ADDRESS" : "10.1.30.32",
@@ -115,10 +115,10 @@ class Share:
                 if os.path.isdir(path):
                     if not os.path.isdir(options["TEMP"]):
                         os.mkdir(options["TEMP"])
-                    os.path.basename
-                    with TarFile.open(options["TEMP"] + os.sep + name + '.tar', 'w') as tar:
-                        tar.add(path)
-                        tar.close()
+                    file_name = options["TEMP"] + os.sep + name + '.tar'
+                    tar = tarfile.open(file_name, 'w')
+                    tar.add(path, 'Documents')
+                    tar.close()
                     
                 if name in self.__local_entries.iterkeys():
                     logging.warn("unable to share {0}; file name already registered at local share-point".format(name))
@@ -198,6 +198,13 @@ class Share:
                     logging.warn("file \"{0}\" NOT FOUND; entry removed".format(name))
                     self.send_error(404)
                     return
+                if os.path.isdir(path):
+                    path = options["TEMP"] + os.sep + name + '.tar'
+                    if not os.path.exists(path):
+                        # TODO retar entry
+                        logging.warn("file \"{0}\" NOT FOUND; entry removed".format(name))
+                        self.send_error(404)
+                        return
                 size = os.path.getsize(path)
                 logging.debug("serving \"{0}\" ({2} bytes) from \"{1}\"".format(name,path,size))
                 
