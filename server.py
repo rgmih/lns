@@ -150,7 +150,7 @@ class Share:
                         os.mkdir(options["TEMP"])
                     file_name = options["TEMP"] + os.sep + name + '.tar'
                     tar = tarfile.open(file_name, 'w')
-                    tar.add(path, 'Documents')
+                    tar.add(path, name)
                     tar.close()
                 
                 # write to database
@@ -269,7 +269,7 @@ class Share:
                     response = json.dumps(entries, cls=EntryJSONEncoder)
                     
                 elif self.path.startswith("/entry/"):
-                    self.do_GET_entry(self.path[:])
+                    self.do_GET_entry(self.path[7:])
                     return
                 elif self.path.startswith("/static/"):
                     http_serve(self, self.path[1:])

@@ -7,21 +7,6 @@ import tarfile
 import urllib2
 import cmd
 
-def get_file(host, port, name, file_info):
-    file_path = "http://{0}:{1}/entry/{2}".format(host, port, name)
-    data = http_get(file_path)
-    if file_info["isdir"]:
-        name += '.tar'
-    local_file = open(name, 'w')
-    local_file.write(data)
-    local_file.close()
-    if file_info["isdir"]:
-        tar = tarfile.open(name)
-        tar.extractall()
-        tar.close()
-        os.remove(name)
-    logging.info("GET 200: from '{0}'".format(file_path))
-
 def send_post(host, action, data):
     port = options['HTTP_PORT']
     opener = urllib2.build_opener(urllib2.HTTPHandler)
@@ -38,19 +23,44 @@ def remove_file(host, file_name):
     elif result == 1:
         logging.error("unable to remove; file or directory does not exist")
 
-def get_files():
-    localhost = options['SELF_ADDRESS']
-    port = options['HTTP_PORT']
-    result = http_get("http://{0}:{1}/ls".format(localhost, port))
-    share = json.loads(result)
-    files = {}
-    for host in share.iterkeys():
-        for file_name in share[host].iterkeys():
-            if not file_name in files:
-                files[file_name] = {}
-            hosts = files[file_name]
-            hosts[host] = share[host][file_name]
-    return files
+class RemoteEntry:
+    
+    def __init__(self,name,addr,isdir,size=0):
+        self.name = name
+        self.addr = addr
+        self.isdir = isdir
+        self.size = size
+
+def do_get(entry):
+    url = "http://{0}:{1}/entry/{2}".format(entry.addr, options['HTTP_PORT'], entry.name)
+    
+    try:
+        opener = urllib2.build_opener(urllib2.HTTPHandler)
+        http_request = urllib2.Request(url)
+        http = opener.open(http_request)
+        
+        def read_in_chunks(http, chunk_size=16384):
+            while True:
+                data = http.read(chunk_size)
+                if not data:
+                    break
+                yield data
+        
+        local_name = entry.name;
+        if entry.isdir:
+            local_name += '.tar'
+        with open(local_name, 'w') as local_file:
+            for piece in read_in_chunks(http):
+                local_file.write(piece)
+        http.close()
+        
+        if entry.isdir:
+            tar = tarfile.open(local_name)
+            tar.extractall()
+            tar.close()
+            os.remove(local_name)
+    except urllib2.URLError:
+        logging.warn("unable to get file")
 
 def do_ls():
     host = options['SELF_ADDRESS']
@@ -65,20 +75,15 @@ def do_ls():
     entries = {}
     for addr,point in share.iteritems():
         for name,entry in point.iteritems():
-            entries["{0}@{1}".format(name,addr)] = {
-                "name" : name,
-                "addr" : addr,
-                "size" : entry["size"],
-                "isdir": entry["isdir"]
-            }
+            entries["{0}@{1}".format(name,addr)] = RemoteEntry(name,addr,entry["isdir"],entry["size"])
             if tmp.has_key(name):
                 tmp[name] += 1
             else:
                 tmp[name] = 1
-    for key,info in entries.items():
-        if tmp[info["name"]] == 1:
+    for key,entry in entries.items():
+        if tmp[entry.name] == 1:
             entries.pop(key)
-            entries[info["name"]] = info
+            entries[entry.name] = entry
     return entries
 
 class LNSCmd(cmd.Cmd):
@@ -94,15 +99,18 @@ class LNSCmd(cmd.Cmd):
         if not entries:
             return
         self.entries = entries
-        for name,info in iter(sorted(entries.iteritems())):
-            if info["isdir"]:
-                print "  {0}\t\033[1;34m{1}\033[0m".format(info["size"],name)
+        for name,entry in iter(sorted(entries.iteritems())):
+            if entry.isdir:
+                print "  {0}\t\033[1;34m{1}\033[0m".format(entry.size,name)
             else:
-                print "  {0}\t{1}".format(info["size"],name)
+                print "  {0}\t{1}".format(entry.size,name)
         pass
     
     def do_get(self, line):
-        print line
+        if not self.entries.has_key(line):
+            logging.warn("unknown entry")
+        else:
+            do_get(entries[line])
         
     def complete_get(self, text, line, begidx, endidx):
         return [k for k in self.entries.iterkeys() if k.startswith(text)]
@@ -142,6 +150,7 @@ if __name__ == '__main__':
     elif sys.argv[1] == "ls":
         result = http_get("http://{0}:{1}/ls".format(localhost, port))
         logging.info(result)
+        """
     elif sys.argv[1] == "get":
         files = get_files()
         for path in sys.argv[2:]:
@@ -161,6 +170,7 @@ if __name__ == '__main__':
                     get_file(file_host, port, file_name, file_info)
                 else:
                     logging.warn("File '{0}': not found".format(path))
+                   
     elif sys.argv[1] == 'rm':
         files = get_files()
         for path in sys.argv[2:]:
@@ -180,4 +190,5 @@ if __name__ == '__main__':
                     remove_file(file_host, file_name)
             else:
                 logging.warn("unable to delete; file does not exist")
+                """
     pass
