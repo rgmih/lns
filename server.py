@@ -5,7 +5,6 @@ import copy
 import json
 import logging.config
 import os
-import re
 import socket
 import sqlite3
 import tarfile
@@ -13,9 +12,10 @@ import thread
 import threading
 import time
 import urllib2
+import mimetypes
 
 options = {
-    "SELF_ADDRESS" : "10.1.30.41",
+    "SELF_ADDRESS" : "192.168.1.2",
     "UDP_PORT" : 6500,
     "HTTP_PORT" : 6969,
     "TEMP" : ".lns"
@@ -36,16 +36,41 @@ def http_get(url):
     http.close()
     return result
 
+def http_serve(request,path):
+    if not os.path.exists(path):
+        logging.warn("file/folder \"{0}\" NOT FOUND".format(path))
+        request.send_error(404)
+        return
+    
+    content_type,encoding = mimetypes.guess_type(path)
+    
+    size = os.path.getsize(path)
+    logging.debug("serving {1} bytes from \"{0}\"".format(path,size))
+    
+    f = open(path,"rb")
+    
+    request.send_response(200)
+    request.send_header("Content-Type", content_type)
+    request.send_header("Content-Length", size)
+    request.end_headers()
+    
+    def read_in_chunks(file_object, chunk_size=16384):
+        while True:
+            data = file_object.read(chunk_size)
+            if not data:
+                break
+            yield data
+
+    
+    for piece in read_in_chunks(f):
+        request.wfile.write(piece)
+
 class ShareResult:
     OK        = 0
     DUPLICATE = 1
     NOT_EXIST = 2
     INTERNAL  = 3
     
-class RemoveResult:
-    OK        = 0
-    NOT_EXISTS = 1
-
 class Share:
     
     class Entry:
@@ -81,7 +106,6 @@ class Share:
         with self.__lock:
             if addr in self.__points.keys():
                 self.__points[addr].time = 0
-                # logging.debug("reset time on {0} share-point".format(addr))
             else:
                 self.__points[addr] = Share.Point(addr)
                 logging.info("share-point found at {0}".format(addr))
@@ -90,14 +114,12 @@ class Share:
         with self.__lock:
             for addr,point in self.__points.iteritems():
                 point.time += t
-                # logging.debug("share-point at {0} time={1}".format(addr, point.time))
             for addr,point in self.__points.items():
                 if point.time > 30: # no response from point for 30 seconds\
                     logging.info("share-point at {0} not reachable; removing", addr)
                     del self.__points[addr]
     
     def get_points(self):
-        # returns snapshot of points
         with self.__lock:
             return copy.deepcopy(self.__points)
         
@@ -117,17 +139,19 @@ class Share:
                     logging.warn("unable to share {0}; file doesn't exist".format(path))
                     return ShareResult.NOT_EXIST
                 name = os.path.basename(path)
+                
+                if name in self.__local_entries.iterkeys():
+                    logging.warn("unable to share {0}; file name already registered at local share-point".format(name))
+                    return ShareResult.DUPLICATE
+                
                 if os.path.isdir(path):
+                    # TODO refactor this
                     if not os.path.isdir(options["TEMP"]):
                         os.mkdir(options["TEMP"])
                     file_name = options["TEMP"] + os.sep + name + '.tar'
                     tar = tarfile.open(file_name, 'w')
                     tar.add(path, 'Documents')
                     tar.close()
-                    
-                if name in self.__local_entries.iterkeys():
-                    logging.warn("unable to share {0}; file name already registered at local share-point".format(name))
-                    return ShareResult.DUPLICATE
                 
                 # write to database
                 db = sqlite3.connect('lns.db')
@@ -148,12 +172,15 @@ class Share:
                 db.commit()
                 db.close()
                 
+                # TODO clear cache?
+                
                 self.__local_entries.pop(name)
+                logging.info("{0} removed; OK".format(name))
+                return ShareResult.OK
             else:
                 logging.warn("unable to remove {0}; file doesn't exist".format(name))
-                return RemoveResult.NOT_EXISTS
-            logging.info("{0} deleted; OK".format(name))
-            return RemoveResult.OK
+                return ShareResult.NOT_EXIST
+        
     def connect(self):
         
         share = self
@@ -204,12 +231,6 @@ class Share:
         
         # run HTTP server
         class HTTPHandler(BaseHTTPRequestHandler):
-            def read_in_chunks(self, file_object, chunk_size=16384):
-                while True:
-                    data = file_object.read(chunk_size)
-                    if not data:
-                        break
-                    yield data
             
             def do_GET_entry(self,name):
                 entry = share.get_local_entry(name)
@@ -218,34 +239,14 @@ class Share:
                     self.send_error(404)
                     return
                 path = entry.path
-                if not os.path.exists(path):
-                    # TODO remove entry
-                    logging.warn("file \"{0}\" NOT FOUND; entry removed".format(name))
-                    self.send_error(404)
-                    return
                 if os.path.isdir(path):
                     path = options["TEMP"] + os.sep + name + '.tar'
-                    if not os.path.exists(path):
-                        # TODO retar entry
-                        logging.warn("file \"{0}\" NOT FOUND; entry removed".format(name))
-                        self.send_error(404)
-                        return
-                size = os.path.getsize(path)
-                logging.debug("serving \"{0}\" ({2} bytes) from \"{1}\"".format(name,path,size))
-                
-                
-                f = open(path,"rb")
-                
-                self.send_response(200)
-                self.send_header("Content-Type", "application/octet-stream")
-                self.send_header("Content-Length", size)
-                self.end_headers()
-                
-                for piece in self.read_in_chunks(f):
-                    self.wfile.write(piece)
-                return
+                http_serve(self, path)
             
             def do_GET(self):
+                
+                if self.path == "/":
+                    self.path = "/static/index.html"
                 response = ""
                 if self.path == "/ls":
                     logging.debug("/js; querying all share-points")
@@ -254,7 +255,6 @@ class Share:
                         # list files at given address
                         response = http_get("http://{0}:{1}/local".format(addr,options["HTTP_PORT"]))
                         total_list[addr] = json.loads(response)
-                    
                     response = json.dumps(total_list)
                     
                 elif self.path == "/local": # list local entries
@@ -267,37 +267,16 @@ class Share:
                             else:
                                 return json.JSONEncoder.default(self, obj)
                     response = json.dumps(entries, cls=EntryJSONEncoder)
+                    
                 elif self.path.startswith("/entry/"):
                     self.do_GET_entry(self.path[:])
                     return
-                elif (self.path == "/index.html" or self.path == "/" or self.path.startswith("/static/")):
-                    path = self.path[1:]
-                    content_type = ""
-                    print path[-2:]
-                    if (path[-2:] == "js"):
-                        content_type = "text/javascript"
-                    else:
-                        content_type = "text/html"
-                        
-                    if not path:
-                        path = "index.html"
-                    if os.path.exists(path):
-                        size = os.path.getsize(path)
-                        f = open(path,"rb")
-                        self.send_response(200)
-                        self.send_header("Content-Type", content_type)
-                        self.send_header("Content-Length", size)
-                        self.end_headers()
-                
-                        for piece in self.read_in_chunks(f):
-                            self.wfile.write(piece)
-                        return
-                    else:
-                        logging.warn("Can not locate requested file: {0}".format(path))
-                        self.send_error(404)
+                elif self.path.startswith("/static/"):
+                    http_serve(self, self.path[1:])
+                    return
                 else:
                     self.send_error(404)
-
+                    return
                 
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
@@ -310,22 +289,17 @@ class Share:
                     content = self.rfile.read(length)
                     path_list = json.loads(content)
                     result = share.share(path_list)
-                    
-                    self.send_response(200)
-                    self.send_header("Content-type", "text/plain")
-                    self.end_headers()
-                    self.wfile.write(result)
                 elif self.path == "/rm":
                     length = int(self.headers['Content-Length'])
                     content = u'' + self.rfile.read(length)
                     result = share.remove(content)
-                    
-                    self.send_response(200)
-                    self.send_header("Content-type", "text/plain")
-                    self.end_headers()
-                    self.wfile.write(result)
                 else:
                     self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.end_headers()
+                self.wfile.write(result)
                 
         class ThreadingHTTPServer(SocketServer.ThreadingMixIn, HTTPServer):
             pass  
