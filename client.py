@@ -100,7 +100,7 @@ class LNSCmd(cmd.Cmd):
             return
         self.entries = entries
     
-    def do_ls(self, line):
+    def do_ls(self, line=""):
         self.__ls()
         for name,entry in iter(sorted(self.entries.iteritems())):
             if entry.isdir:
@@ -111,17 +111,19 @@ class LNSCmd(cmd.Cmd):
     
     def do_get(self, line):
         self.__ls()
-        if not self.entries.has_key(line):
-            logging.warn("unknown entry")
-        else:
-            do_get(self.entries[line])
+        for path in line.split(' '):
+            if not self.entries.has_key(path):
+                logging.warn("unknown entry '{0}'".format(path))
+            else:
+                do_get(self.entries[path])
      
     def do_rm(self, line):
         self.__ls()
-        if not self.entries.has_key(line):
-            logging.warn("unknown entry")
-        else:
-            do_rm(self.entries[line]) 
+        for path in line.split(' '):
+            if not self.entries.has_key(path):
+                logging.warn("unknown entry '{0}'".format(path))
+            else:
+                do_rm(self.entries[path]) 
         
     def complete_get(self, text, line, begidx, endidx):
         return [k for k in self.entries.iterkeys() if k.startswith(text)]
@@ -136,10 +138,11 @@ if __name__ == '__main__':
     localhost = options['SELF_ADDRESS']
     port = options['HTTP_PORT']
     logging.config.fileConfig("logging.cfg")
+    entries = do_ls()
+    lns_cmd = LNSCmd(entries)
     if len(sys.argv) is 1: # go to console mode
-        try:
-            entries = do_ls()
-            LNSCmd(entries).cmdloop('lns says \'hello\'')
+        try:  
+            lns_cmd.cmdloop('lns says \'hello\'')
         except urllib2.URLError:
             print "no connection to local share-point"
         except KeyboardInterrupt:
@@ -162,47 +165,11 @@ if __name__ == '__main__':
             logging.error("unable to share; file does not exist")
             
     elif sys.argv[1] == "ls":
-        result = http_get("http://{0}:{1}/ls".format(localhost, port))
-        logging.info(result)
-        """
+        lns_cmd.do_ls()
     elif sys.argv[1] == "get":
-        files = get_files()
         for path in sys.argv[2:]:
-            parsed_path = path.partition('@')
-            file_name = parsed_path[0]
-            file_host = parsed_path[2]
-            if file_name in files:
-                hosts = files[file_name]
-                if not file_host:
-                    if len(hosts) == 1:
-                        host = hosts.iterkeys().next()
-                        get_file(host, port, file_name, hosts[host])
-                    else:
-                        logging.error("Error: ambiguous name '{0}'. You must specify a host: {1}".format(path, hosts.keys()))
-                elif file_host in hosts:
-                    file_info = hosts[file_host]
-                    get_file(file_host, port, file_name, file_info)
-                else:
-                    logging.warn("File '{0}': not found".format(path))
-                   
+            lns_cmd.do_get(path)        
     elif sys.argv[1] == 'rm':
-        files = get_files()
         for path in sys.argv[2:]:
-            parsed_path = path.partition('@')
-            file_name = parsed_path[0]
-            file_host = parsed_path[2]
-            logging.info("deleting {0}".format(path))
-            if file_name in files:
-                hosts = files[file_name]
-                if not file_host:
-                    if len(hosts) == 1:
-                        host = hosts.iterkeys().next()
-                        remove_file(host, file_name)
-                    else:
-                        logging.error("Error: ambiguous name '{0}'. You must specify a host: {1}".format(path, hosts.keys()))
-                elif file_host in hosts:
-                    remove_file(file_host, file_name)
-            else:
-                logging.warn("unable to delete; file does not exist")
-                """
+            lns_cmd.do_rm(path)    
     pass
