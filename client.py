@@ -75,28 +75,37 @@ def do_ls():
                 tmp[name] += 1
             else:
                 tmp[name] = 1
-    for info in entries.itervalues():
-        info["need_full"] = tmp[info["name"]] > 1
+    for key,info in entries.items():
+        if tmp[info["name"]] == 1:
+            entries.pop(key)
+            entries[info["name"]] = info
     return entries
 
 class LNSCmd(cmd.Cmd):
     
     prompt = '$ '
     
+    def __init__(self,entries):
+        self.entries = entries
+        cmd.Cmd.__init__(self)
+    
     def do_ls(self, line):
         entries = do_ls()
         if not entries:
             return
+        self.entries = entries
         for name,info in iter(sorted(entries.iteritems())):
-            title = info["name"]
-            if info["need_full"]:
-                title = "{0}@{1}".format(info["name"],info["addr"])
             if info["isdir"]:
-                print "  {0}\t\033[1;34m{1}\033[0m".format(info["size"],title)
+                print "  {0}\t\033[1;34m{1}\033[0m".format(info["size"],name)
             else:
-                print "  {0}\t{1}".format(info["size"],title)
+                print "  {0}\t{1}".format(info["size"],name)
         pass
     
+    def do_get(self, line):
+        print line
+        
+    def complete_get(self, text, line, begidx, endidx):
+        return [k for k in self.entries.iterkeys() if k.startswith(text)]
     
     def do_EOF(self, line):
         return True
@@ -107,7 +116,10 @@ if __name__ == '__main__':
     logging.config.fileConfig("logging.cfg")
     if len(sys.argv) is 1: # go to console mode
         try:
-            LNSCmd().cmdloop('lns says \'hello\'')
+            entries = do_ls()
+            LNSCmd(entries).cmdloop('lns says \'hello\'')
+        except urllib2.URLError:
+            print "no connection to local share-point"
         except KeyboardInterrupt:
             print
         sys.exit()
