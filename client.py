@@ -56,14 +56,11 @@ def do_get(entry):
         logging.warn("unable to get file")
 
 def do_ls():
-    host = options['SELF_ADDRESS']
     port = options['HTTP_PORT']
-    try:
-        result = http_get("http://{0}:{1}/ls".format(host,port))
-        share = json.loads(result)
-    except urllib2.URLError:
-        logging.error("no connection to local share-point at {0}:{1}".format(host,port))
-        return
+    
+    result = http_get("http://127.0.0.1:{0}/ls".format(port))
+    share = json.loads(result)
+    
     tmp = {}
     entries = {}
     for addr,point in share.iteritems():
@@ -135,16 +132,15 @@ class LNSCmd(cmd.Cmd):
         return True
 
 if __name__ == '__main__':
-    localhost = options['SELF_ADDRESS']
     port = options['HTTP_PORT']
     logging.config.fileConfig("logging.cfg")
     entries = do_ls()
     lns_cmd = LNSCmd(entries)
     if len(sys.argv) is 1: # go to console mode
         try:  
-            lns_cmd.cmdloop('lns says \'hello\'')
+            lns_cmd.cmdloop("lns says \'hello\'; try ls, get and rm")
         except urllib2.URLError:
-            print "no connection to local share-point"
+            print "no connection to local share-point @127.0.0.1"
         except KeyboardInterrupt:
             print
         sys.exit()
@@ -156,7 +152,7 @@ if __name__ == '__main__':
             # TODO validate path
             logging.info("sharing {0}".format(fullpath))
             path_list.append(fullpath)
-        result = send_post(localhost, "share", json.dumps(path_list))
+        result = send_post("127.0.0.1", "share", json.dumps(path_list))
         if result == 0:
             logging.info("shared; OK")
         elif result == 1:
