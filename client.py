@@ -5,6 +5,7 @@ import os
 import sys
 import tarfile
 import urllib2
+import cmd
 
 def get_file(host, port, name, file_info):
     file_path = "http://{0}:{1}/entry/{2}".format(host, port, name)
@@ -51,13 +52,64 @@ def get_files():
             hosts[host] = share[host][file_name]
     return files
 
+def do_ls():
+    host = options['SELF_ADDRESS']
+    port = options['HTTP_PORT']
+    try:
+        result = http_get("http://{0}:{1}/ls".format(host,port))
+        share = json.loads(result)
+    except urllib2.URLError:
+        logging.error("no connection to local share-point at {0}:{1}".format(host,port))
+        return
+    tmp = {}
+    entries = {}
+    for addr,point in share.iteritems():
+        for name,entry in point.iteritems():
+            entries["{0}@{1}".format(name,addr)] = {
+                "name" : name,
+                "addr" : addr,
+                "size" : entry["size"],
+                "isdir": entry["isdir"]
+            }
+            if tmp.has_key(name):
+                tmp[name] += 1
+            else:
+                tmp[name] = 1
+    for info in entries.itervalues():
+        info["need_full"] = tmp[info["name"]] > 1
+    return entries
+
+class LNSCmd(cmd.Cmd):
+    
+    prompt = '$ '
+    
+    def do_ls(self, line):
+        entries = do_ls()
+        if not entries:
+            return
+        for name,info in iter(sorted(entries.iteritems())):
+            title = info["name"]
+            if info["need_full"]:
+                title = "{0}@{1}".format(info["name"],info["addr"])
+            if info["isdir"]:
+                print "  {0}\t\033[1;34m{1}\033[0m".format(info["size"],title)
+            else:
+                print "  {0}\t{1}".format(info["size"],title)
+        pass
+    
+    
+    def do_EOF(self, line):
+        return True
+
 if __name__ == '__main__':
     localhost = options['SELF_ADDRESS']
     port = options['HTTP_PORT']
     logging.config.fileConfig("logging.cfg")
-    if len(sys.argv) is 1:
-        # go to console mode
-        logging.error("console mode not supported yet")
+    if len(sys.argv) is 1: # go to console mode
+        try:
+            LNSCmd().cmdloop('lns says \'hello\'')
+        except KeyboardInterrupt:
+            print
         sys.exit()
     
     if sys.argv[1] == "share":
