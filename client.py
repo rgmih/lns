@@ -16,13 +16,6 @@ def send_post(host, action, data):
     url.close()
     return result
 
-def remove_file(host, file_name):
-    result = send_post(host, "rm", file_name)
-    if result == 0:
-        logging.info("removed; OK")
-    elif result == 1:
-        logging.error("unable to remove; file or directory does not exist")
-
 class RemoteEntry:
     
     def __init__(self,name,addr,isdir,size=0):
@@ -86,6 +79,13 @@ def do_ls():
             entries[entry.name] = entry
     return entries
 
+def do_rm(entry):
+    result = send_post(entry.addr, "rm", entry.name)
+    if result == 0:
+        logging.info("removed; OK")
+    elif result == 1:
+        logging.error("unable to remove; file or directory does not exist")
+
 class LNSCmd(cmd.Cmd):
     
     prompt = '$ '
@@ -94,12 +94,15 @@ class LNSCmd(cmd.Cmd):
         self.entries = entries
         cmd.Cmd.__init__(self)
     
-    def do_ls(self, line):
+    def __ls(self):
         entries = do_ls()
         if not entries:
             return
         self.entries = entries
-        for name,entry in iter(sorted(entries.iteritems())):
+    
+    def do_ls(self, line):
+        self.__ls()
+        for name,entry in iter(sorted(self.entries.iteritems())):
             if entry.isdir:
                 print "  {0}\t\033[1;34m{1}\033[0m".format(entry.size,name)
             else:
@@ -107,12 +110,23 @@ class LNSCmd(cmd.Cmd):
         pass
     
     def do_get(self, line):
+        self.__ls()
         if not self.entries.has_key(line):
             logging.warn("unknown entry")
         else:
-            do_get(entries[line])
+            do_get(self.entries[line])
+     
+    def do_rm(self, line):
+        self.__ls()
+        if not self.entries.has_key(line):
+            logging.warn("unknown entry")
+        else:
+            do_rm(self.entries[line]) 
         
     def complete_get(self, text, line, begidx, endidx):
+        return [k for k in self.entries.iterkeys() if k.startswith(text)]
+    
+    def complete_rm(self, text, line, begidx, endidx):
         return [k for k in self.entries.iterkeys() if k.startswith(text)]
     
     def do_EOF(self, line):
