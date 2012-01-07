@@ -1,9 +1,13 @@
 
 
 update_entries = function() {
-	var main_container = document.getElementById('container');
-	var children = main_container.childNodes;
-	var b = 10;
+	var response_data = new String();
+	$.get(
+		"/ls",
+		function(data) {
+			response_data += data.toString();
+		}
+	);
 	
-	alert('Refreshed');
+	alert('Refreshed. Response data: ' + response_data);
 };
