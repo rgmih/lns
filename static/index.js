@@ -10,10 +10,13 @@ _on_ajax_success = function(data) {
 		for (file in files) {
 			var isdir = files[file]['isdir'];
 			var size = files[file]['size'];
+			var file_name = file.toString() + ' ';
+			if (isdir == true) {
+				file_name += '(directory)';
+			} 
 
 			var new_element = document.createElement('a');
-			new_element.textContent = host.toString() + ':  ' + file.toString() + 
-				',  directory: ' + isdir.toString() + ',  size: ' + size.toString() + ' bytes';
+			new_element.textContent = host.toString() + ':  ' + file_name + ',  size: ' + size.toString() + ' bytes';
 			container.appendChild(new_element);
 			container.appendChild(document.createElement('br'));
 		}
