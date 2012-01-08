@@ -23,6 +23,7 @@ class RemoteEntry:
         self.addr = addr
         self.isdir = isdir
         self.size = size
+        self.local = (addr == options["SELF_ADDRESS"])
 
 def do_get(entry):
     url = "http://{0}:{1}/entry/{2}".format(entry.addr, options['HTTP_PORT'], entry.name)
@@ -101,9 +102,15 @@ class LNSCmd(cmd.Cmd):
         self.__ls()
         for name,entry in iter(sorted(self.entries.iteritems())):
             if entry.isdir:
-                print "  {0}\t\033[1;34m{1}\033[0m".format(entry.size,name)
+                if entry.local:
+                    print "\033[1;32m*\033[0m {0}\t\033[1;34m{1}\033[0m".format(entry.size,name)
+                else:
+                    print "  {0}\t\033[1;34m{1}\033[0m".format(entry.size,name)
             else:
-                print "  {0}\t{1}".format(entry.size,name)
+                if entry.local:
+                    print "\033[1;32m*\033[0m {0}\t{1}".format(entry.size,name)
+                else:
+                    print "  {0}\t{1}".format(entry.size,name)
         pass
     
     def do_get(self, line):
@@ -127,9 +134,6 @@ class LNSCmd(cmd.Cmd):
     
     def complete_rm(self, text, line, begidx, endidx):
         return [k for k in self.entries.iterkeys() if k.startswith(text)]
-    
-    def do_EOF(self, line):
-        return True
 
 if __name__ == '__main__':
     port = options['HTTP_PORT']
