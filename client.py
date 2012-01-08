@@ -133,7 +133,7 @@ class LNSCmd(cmd.Cmd):
         return [k for k in self.entries.iterkeys() if k.startswith(text)]
     
     def complete_rm(self, text, line, begidx, endidx):
-        return [k for k in self.entries.iterkeys() if k.startswith(text)]
+        return [k for k,e in self.entries.iteritems() if k.startswith(text) and e.local]
 
 if __name__ == '__main__':
     port = options['HTTP_PORT']
